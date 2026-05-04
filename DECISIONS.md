@@ -313,3 +313,7 @@ re-training run, no architectural change.
 
 **Source:** Conversation 2026-05-04. Triggered by JE's failed H100/A100
 hunt + asked "can we add in DeepSeek v4."
+
+**See also:** ADR-002 [`docs/adr/0002-per-customer-llm-selection.md`](docs/adr/0002-per-customer-llm-selection.md)
+for the per-customer LLM-target selection logic, decision tree at
+first-conversation, and risk/mitigation table.

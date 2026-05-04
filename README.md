@@ -101,8 +101,9 @@ wonderwall/
 ├── DECISIONS.md                        11 architectural decisions logged with sources
 ├── HANDOFF.md                          what's stubbed vs real, critical-path order
 ├── docs/
-│   └── adr/0001-pipeline-c-vs-b.md     why Pipeline C exists vs Pipeline B
-│   └── model_card.md                   template for Red Hat AI catalog publication
+│   ├── adr/0001-pipeline-c-vs-b.md                why Pipeline C exists vs Pipeline B
+│   ├── adr/0002-per-customer-llm-selection.md     per-customer LLM target selection (Gemma 4 vs DeepSeek v4)
+│   └── model_card.md                              template for Red Hat AI catalog publication
 ├── pyproject.toml                      6 install extras: llm, scotty, kafka, serve, dev, all
 ├── configs/                            5 YAMLs: adapter, llm_gemma4, scotty, train, sweep
 ├── samples/                            real V2 payload + generator
@@ -192,4 +193,5 @@ Tracked in HANDOFF.md.
 - [ts_sor_base-1 Implementation Status](https://kavara.atlassian.net/wiki/spaces/PE/pages/79921153) — venue policy, calibration
 - [Kavara × Red Hat Collaboration](https://kavara.atlassian.net/wiki/spaces/PE/pages/80379905) — deployment context, KServe pattern
 - [Scotty repo](https://github.com/UlyssesModel/scotty) — LLM serving layer downstream
-- ADR-001: [`docs/adr/0001-pipeline-c-vs-b.md`](docs/adr/0001-pipeline-c-vs-b.md)
+- ADR-001: [`docs/adr/0001-pipeline-c-vs-b.md`](docs/adr/0001-pipeline-c-vs-b.md) — why Pipeline C exists when B already pays the bills
+- ADR-002: [`docs/adr/0002-per-customer-llm-selection.md`](docs/adr/0002-per-customer-llm-selection.md) — per-customer LLM target (Gemma 4 31B vs DeepSeek v4) selection logic
