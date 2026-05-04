@@ -105,6 +105,8 @@ train-stub: install distill-stub  ## Train the adapter on stub Kirk + local Scot
 		--adapter-config $(WONDERWALL_ADAPTER_CONFIG) \
 		--llm-config $(WONDERWALL_LLM_CONFIG) \
 		--train-config configs/train_default.yaml \
+		--distill-path $(DEV_DATA) \
+		--save-path $(DEV_CKPT) \
 		--use-stub-kirk
 
 eval-stub: install train-stub  ## Run A/B/C eval harness against stub Kirk

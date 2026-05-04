@@ -30,6 +30,11 @@ def main():
     p.add_argument("--adapter-config", required=True)
     p.add_argument("--llm-config", required=True)
     p.add_argument("--train-config", required=True)
+    p.add_argument("--distill-path", default=None,
+                   help="Override train-config's distill_path (e.g. point at "
+                        "data/distilled_dev.pt for the plumbing demo)")
+    p.add_argument("--save-path", default=None,
+                   help="Override train-config's save_path for the adapter checkpoint")
     p.add_argument("--use-stub-kirk", action="store_true",
                    help="Use the synthetic Kirk client for plumbing-test training runs")
     args = p.parse_args()
@@ -37,6 +42,10 @@ def main():
     adapter_cfg = AdapterConfig(**load_yaml(args.adapter_config))
     llm_cfg = LLMConfig(**load_yaml(args.llm_config))
     train_cfg = TrainConfig(**load_yaml(args.train_config))
+    if args.distill_path is not None:
+        train_cfg.distill_path = args.distill_path
+    if args.save_path is not None:
+        train_cfg.save_path = args.save_path
 
     if args.use_stub_kirk:
         kirk = StubKirkClient(n=adapter_cfg.n, use_complex=adapter_cfg.use_complex)
