@@ -32,10 +32,9 @@ from typing import Optional
 
 
 _DEFAULT_FIELDS = {
-    "timestamp": "asctime",
-    "level": "levelname",
-    "logger": "name",
-    "message": "message",
+    "asctime": "timestamp",
+    "levelname": "level",
+    "name": "logger",
 }
 
 
