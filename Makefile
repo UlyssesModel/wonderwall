@@ -50,13 +50,15 @@ pin-deepseek: install  ## Auto-pin DeepSeek V4-Pro hidden dim (per ADR-002 multi
 		--hf-fallback deepseek-ai/DeepSeek-V4-Pro \
 		--no-update-adapter
 
-pin-llm: install  ## Generic pin: make pin-llm MODEL=<gemma4|deepseek4|...>
+pin-llm: install  ## Generic pin: make pin-llm MODEL=<gemma4|deepseek4|gemma3_12b|...> [OLLAMA_MODEL=...] [HF_ID=...]
 	@if [ -z "$(MODEL)" ]; then \
-		echo "Usage: make pin-llm MODEL=<gemma4|deepseek4|...>"; exit 1; \
+		echo "Usage: make pin-llm MODEL=<gemma4|deepseek4|gemma3_12b|...> [OLLAMA_MODEL=<tag>] [HF_ID=<hf-id>]"; exit 1; \
 	fi
 	$(PY) scripts/pin_gemma_hidden_dim.py \
 		--base-url $(SCOTTY_BASE_URL) \
 		--llm-config configs/llm_$(MODEL).yaml \
+		$(if $(OLLAMA_MODEL),--ollama-model $(OLLAMA_MODEL),) \
+		$(if $(HF_ID),--hf-fallback $(HF_ID),) \
 		--no-update-adapter
 
 preflight: install  ## Run environment / config / endpoint sanity checks
