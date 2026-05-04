@@ -13,7 +13,12 @@ venv/
 *.pth
 checkpoints/
 data/
-reports/
+# Generated demo / eval / sweep artifacts (HTML, CSV, JSON, logs) live in
+# reports/. Curated markdown reports (e.g. v0.1-plumbing-results-*.md) ARE
+# tracked — Git can't re-include children of an excluded parent dir, so
+# we exclude the contents and exempt .md by name.
+reports/*
+!reports/*.md
 
 # Editor / OS
 .vscode/

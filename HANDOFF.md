@@ -98,6 +98,10 @@ Production demo with Gemma 4 31B requires **>=80GB GPU + HF auth** (H100
 works out of the box once `HF_TOKEN` is exported — no env-var override
 of the LLM config needed.
 
+For the actual numbers a `make demo` run produces — eval/sweep table,
+what the run validates, and what's still bracketed pending real-Kirk
+data — see [`reports/v0.1-plumbing-results-2026-05-04.md`](reports/v0.1-plumbing-results-2026-05-04.md).
+
 To pin a new cost-knob LLM:
 
 ```bash
