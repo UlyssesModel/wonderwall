@@ -136,6 +136,13 @@ class EmbeddingInjectionLLM:
         Returns decoded text (the new tokens only, prompt embeds are not decoded
         because they have no token-id representation).
         """
+        # The projection adapter runs in float32; the LLM is loaded in
+        # bf16/fp16 per LLMConfig.dtype. Training paths get away with the
+        # mismatch via autocast, but eval (no autocast) raises
+        # "mat1 Float vs mat2 BFloat16" at the first attention layer.
+        # Cast inputs to the model's parameter dtype here so any caller
+        # producing fp32 embeddings (Pipeline C, eval harness) just works.
+        inputs_embeds = inputs_embeds.to(self.model.dtype)
         out = self.model.generate(
             inputs_embeds=inputs_embeds,
             max_new_tokens=max_new_tokens,
