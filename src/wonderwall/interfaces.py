@@ -213,7 +213,7 @@ class AdapterConfig:
     def __post_init__(self) -> None:
         if self.n < 2:
             raise ValueError(f"n must be >= 2, got {self.n}")
-        if self.llm_hidden_dim < 64:
+        if self.llm_hidden_dim < 16:
             raise ValueError(f"llm_hidden_dim suspiciously small: {self.llm_hidden_dim}")
 
     @property
