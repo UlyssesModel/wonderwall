@@ -94,7 +94,7 @@ def test_design_metadata_loaded(tmp_path):
 def test_missing_tensor_key_raises(tmp_path):
     p = tmp_path / "bad.npz"
     _write_npz(p, irrelevant_key=np.array([1, 2, 3]))
-    with pytest.raises(KeyError, match="not.*found"):
+    with pytest.raises(KeyError, match="None of.*found"):
         load_uhura_frame(str(p))
 
 
