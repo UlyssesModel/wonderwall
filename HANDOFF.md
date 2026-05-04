@@ -51,10 +51,41 @@ cd .. && mv ulysses-jepa wonderwall
 | Path | How to run | What it proves |
 | --- | --- | --- |
 | Unit tests (105 cases, CPU only) | `make test` | Adapter, kirk-client, pipelines, eval, distill, train, serve, prompts, logging, sweep, HMM all sound |
-| Plumbing-validation demo | `make demo` | Distill → train → eval → sweep end-to-end against Stub Kirk + tiny LLM, emits `reports/demo.html` |
+| Plumbing-validation demo | `make demo` | Distill → train → eval → sweep end-to-end against Stub Kirk + tiny LLM, emits `reports/demo.html` (see GPU-sizing note below) |
 | Local Docker dev stack | `make compose-up` | Ollama + Redpanda + predictor running locally; smoke-test all 3 routes |
 | Production OpenShift deploy | `make openshift-apply` | Namespace + Strimzi cluster + KServe InferenceService + Streamer + Grafana dashboard, dependency-ordered |
 | Post-deploy health check | `make smoke-test` | All 3 V2 routes respond 200 with non-empty narrations |
+
+### `make demo` GPU sizing — pick the right cost knob
+
+`make demo`'s defaults target Gemma 4 31B (`configs/llm_gemma4.yaml` +
+`configs/adapter_default.yaml`). Pipeline C's train-stub loads the LLM in
+bf16 on a single GPU; **Gemma 4 31B at bf16 doesn't fit on 40GB**, so on
+anything smaller than an 80GB GPU the demo OOMs at the train step.
+
+**Demo on `scotty-gpu` (A100-SXM4-40GB, ~40GB) uses Gemma 3 12B** as the
+Pipeline C train-stub model (~24GB bf16, fits comfortably). All five
+make-vars below are read by `preflight`, `distill-stub`, `train-stub`,
+`eval-stub`, and `sweep-stub`:
+
+```bash
+WONDERWALL_LLM_CONFIG=configs/llm_gemma3_12b.yaml \
+WONDERWALL_ADAPTER_CONFIG=configs/adapter_demo.yaml \
+WONDERWALL_TEACHER_MODEL=gemma3:12b \
+make demo
+```
+
+Production demo with Gemma 4 31B requires **≥80GB GPU** (H100 80GB,
+A100-80GB SXM, or multi-GPU sharded). On those boxes, `make demo` works
+out of the box — no env-var override needed.
+
+To pin a new cost-knob LLM against a local Ollama:
+
+```bash
+make pin-llm MODEL=<short-name> OLLAMA_MODEL=<ollama-tag> HF_ID=<hf-id>
+# then create configs/llm_<short-name>.yaml + configs/adapter_<short-name>.yaml
+# with llm_hidden_dim matching the pinned value.
+```
 
 ## What's stubbed and needs filling in
 
