@@ -1,23 +1,26 @@
-# Adapter config for the cost-knob demo path (Pipeline C train-stub against
-# Gemma 3 12B instead of Gemma 4 31B).
+# Adapter config for the demo Pipeline C path.
 #
 # Identical to adapter_default.yaml except llm_hidden_dim is matched to
-# Gemma 3 12B (3840) so the projection adapter's output_dim aligns with the
-# LLM's embedding layer. Use this when running `make demo` on a GPU that
-# can't fit Gemma 4 31B at bf16 (anything <80GB; e.g. scotty-gpu's
-# A100-SXM4-40GB).
+# the demo LLM target. The demo default is Qwen 2.5 7B Instruct
+# (3584 hidden dim, Apache-2.0, no HF auth needed) — pair this file with
+# configs/llm_qwen25_7b.yaml.
 #
-# Pair with configs/llm_gemma3_12b.yaml:
+# Production demo (Gemma 4 31B, >=80GB GPU) keeps using the default pair
+# (configs/adapter_default.yaml + configs/llm_gemma4.yaml).
 #
-#   WONDERWALL_LLM_CONFIG=configs/llm_gemma3_12b.yaml \
+# Other matched LLMs (override llm_hidden_dim if pairing manually):
+#   - Qwen 2.5 7B Instruct  -> 3584   (configs/llm_qwen25_7b.yaml)   <- demo default
+#   - Gemma 3 12B IT        -> 3840   (configs/llm_gemma3_12b.yaml)  HF-gated; needs token
+#   - Gemma 4 31B           -> 5376   (configs/llm_gemma4.yaml)      production; HF-gated; >=80GB
+#
+# Demo invocation:
+#
+#   WONDERWALL_LLM_CONFIG=configs/llm_qwen25_7b.yaml \
 #   WONDERWALL_ADAPTER_CONFIG=configs/adapter_demo.yaml \
 #   make demo
-#
-# Production demo (Gemma 4 31B, ≥80GB GPU) keeps using the default pair
-# (configs/adapter_default.yaml + configs/llm_gemma4.yaml).
 
 n: 32
-llm_hidden_dim: 3840
+llm_hidden_dim: 3584
 hidden_dim: 1024
 use_complex: false      # Production Kirk: real-valued log-returns, imag=0
 dropout: 0.0
