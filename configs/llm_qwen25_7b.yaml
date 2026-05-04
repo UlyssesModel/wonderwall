@@ -1,0 +1,28 @@
+# LLM serving config for the embedding-injection path (Pipeline C) — Qwen 2.5 7B Instruct.
+#
+# Demo + GA commercial-tier target. Per the Wonderwall PR/FAQ (2026-05-04),
+# Qwen 2.5 7B Instruct is on the GA commercial-tier target list alongside
+# Gemma and DeepSeek; this config makes it first-class for both the demo
+# pipeline and any production swap.
+#
+# Why this config exists at the demo tier: Gemma 3 12B / Gemma 4 31B are
+# gated on HuggingFace (license accept + token required) and `make demo`'s
+# Pipeline C loads weights through `transformers`. Qwen 2.5 7B Instruct is
+# fully open (Apache-2.0), so the demo runs without HF auth on any box
+# capable of loading ~14GB of bf16 weights — comfortable on 24GB-class
+# GPUs and trivial on 40/80GB.
+#
+# Pinned via `make pin-llm MODEL=qwen25_7b` against HF AutoConfig (no
+# Ollama dependency — Qwen 2.5 7B is not pulled into scotty-gpu's local
+# Ollama as of 2026-05-04). Re-run after any model upgrade.
+#
+# Parallel to configs/llm_gemma4.yaml (production target) and
+# configs/llm_gemma3_12b.yaml (gated alternative cost knob). Wonderwall is
+# model-agnostic (D-015) — the adapter retrains against any LLM with a
+# reachable embedding layer. Swap by setting WONDERWALL_LLM_CONFIG.
+
+model_name: "Qwen/Qwen2.5-7B-Instruct"   # Apache-2.0; no HF auth required
+hidden_dim: 3584                          # Confirmed 2026-05-04 via HF config.json (Qwen2ForCausalLM)
+dtype: "bfloat16"
+device: "cuda"
+trust_remote_code: false
