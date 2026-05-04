@@ -147,8 +147,20 @@ def _load_pipelines() -> dict[str, Any]:
     return {"A": pipe_a, "B": pipe_b, "C": pipe_c}
 
 
+_REQUIRED_ENV = (
+    "WONDERWALL_ADAPTER_CONFIG",
+    "WONDERWALL_LLM_CONFIG",
+    "WONDERWALL_ADAPTER_CHECKPOINT",
+)
+
+
 @asynccontextmanager
 async def _lifespan(app):
+    if not all(k in os.environ for k in _REQUIRED_ENV):
+        # No production config — caller (tests, dev shell) is responsible for
+        # populating _state directly. Skip auto-load so we don't clobber it.
+        yield
+        return
     try:
         pipes = _load_pipelines()
         _state["pipeline"] = pipes["C"]
@@ -165,7 +177,7 @@ async def _lifespan(app):
 
 def _build_app():
     try:
-        from fastapi import FastAPI, HTTPException, Request  # type: ignore
+        from fastapi import Body, FastAPI, HTTPException  # type: ignore
         from fastapi.responses import JSONResponse, Response  # type: ignore
     except ImportError as e:  # pragma: no cover
         raise ImportError(
@@ -252,7 +264,7 @@ def _build_app():
         }
 
     async def _run_pipeline(
-        request: Request,
+        body: dict,
         pipe_state_key: str,
         pipeline_label: str,
         model_name: str,
@@ -267,7 +279,6 @@ def _build_app():
                 status_code=503,
                 detail=f"pipeline {pipeline_label} not loaded",
             )
-        body = await request.json()
         tensors, T, N, request_id, max_new = _parse_tensor_windows(body)
 
         metrics.inference_started(pipeline_label)
@@ -288,10 +299,10 @@ def _build_app():
         return _build_v2_response(model_name, request_id, output_text)
 
     @app.post("/v2/models/wonderwall/infer")
-    async def infer_c(request: Request):
+    async def infer_c(body: dict = Body(...)):
         """Pipeline C — embedding injection (the new build, default route)."""
         return await _run_pipeline(
-            request,
+            body,
             pipe_state_key="pipeline",
             pipeline_label="C_embedding_injection",
             model_name="wonderwall",
@@ -300,10 +311,10 @@ def _build_app():
         )
 
     @app.post("/v2/models/wonderwall-a/infer")
-    async def infer_a(request: Request):
+    async def infer_a(body: dict = Body(...)):
         """Pipeline A — raw text via Scotty (worst-case baseline)."""
         return await _run_pipeline(
-            request,
+            body,
             pipe_state_key="pipeline_a",
             pipeline_label="A_tokenized",
             model_name="wonderwall-a",
@@ -311,10 +322,10 @@ def _build_app():
         )
 
     @app.post("/v2/models/wonderwall-b/infer")
-    async def infer_b(request: Request):
+    async def infer_b(body: dict = Body(...)):
         """Pipeline B — compressed text via Scotty (production today)."""
         return await _run_pipeline(
-            request,
+            body,
             pipe_state_key="pipeline_b",
             pipeline_label="B_compressed_text",
             model_name="wonderwall-b",
