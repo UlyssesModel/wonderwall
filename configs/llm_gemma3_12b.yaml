@@ -1,0 +1,21 @@
+# LLM serving config for the embedding-injection path (Pipeline C) — Gemma 3 12B.
+#
+# Demo cost-knob target: Gemma 4 31B at bf16 doesn't fit on a 40GB GPU
+# (e.g. scotty-gpu's A100-SXM4-40GB), so `make demo`'s Pipeline C
+# train-stub OOMs with llm_gemma4.yaml. Gemma 3 12B at bf16 fits in ~24GB
+# and exercises the same code path. Use this for cost-bounded demos and
+# any dev box without an 80GB GPU. Production demos that need to assert
+# the actual production model still target Gemma 4 31B (llm_gemma4.yaml)
+# and require ≥80GB GPU (H100 80GB, A100-80GB SXM, or multi-GPU).
+#
+# Pinned via `make pin-llm MODEL=gemma3_12b OLLAMA_MODEL=gemma3:12b
+# HF_ID=google/gemma-3-12b-it` against scotty-gpu's local Ollama.
+#
+# Parallel to configs/llm_gemma4.yaml (production target) and
+# configs/llm_deepseek4.yaml (multi-LLM target per ADR-002).
+
+model_name: "google/gemma-3-12b-it"   # Verified resolves on huggingface.co/google
+hidden_dim: 3840                       # Confirmed 2026-05-04 against local Ollama gemma3:12b (gemma3.embedding_length)
+dtype: "bfloat16"
+device: "cuda"
+trust_remote_code: false
