@@ -61,11 +61,26 @@ pin-llm: install  ## Generic pin: make pin-llm MODEL=<gemma4|deepseek4|gemma3_12
 		$(if $(HF_ID),--hf-fallback $(HF_ID),) \
 		--no-update-adapter
 
+# Demo cost-knob: default to production target (Gemma 4 31B, ≥80GB GPU); a
+# 40GB-class box (e.g. scotty-gpu A100-SXM4-40GB) overrides via env vars to
+# swap in the smaller Gemma 3 12B + matching adapter so Pipeline C training
+# fits in memory. Honored by preflight, distill-stub, train-stub, eval-stub,
+# and sweep-stub — every step that touches the LLM target.
+WONDERWALL_LLM_CONFIG     ?= configs/llm_gemma4.yaml
+WONDERWALL_ADAPTER_CONFIG ?= configs/adapter_default.yaml
+WONDERWALL_TEACHER_MODEL  ?= gemma4:31b
+
 preflight: install  ## Run environment / config / endpoint sanity checks
-	$(PY) scripts/preflight.py
+	$(PY) scripts/preflight.py \
+		--adapter-config $(WONDERWALL_ADAPTER_CONFIG) \
+		--llm-config $(WONDERWALL_LLM_CONFIG) \
+		--scotty-model $(WONDERWALL_TEACHER_MODEL)
 
 preflight-strict: install  ## Same as preflight, but warnings are fatal
-	$(PY) scripts/preflight.py --strict
+	$(PY) scripts/preflight.py --strict \
+		--adapter-config $(WONDERWALL_ADAPTER_CONFIG) \
+		--llm-config $(WONDERWALL_LLM_CONFIG) \
+		--scotty-model $(WONDERWALL_TEACHER_MODEL)
 
 label-regimes: install  ## Tag a distilled .pt with gold regime labels
 	$(PY) scripts/label_regimes.py --distilled $(DEV_DATA) --out data/distilled_dev_labeled.pt
@@ -82,12 +97,13 @@ DEV_SWEEP  = reports/sweep.csv
 distill-stub: install  ## Generate a small stub-input distilled set against local Scotty
 	$(PY) scripts/distill_teacher.py \
 		--output $(DEV_DATA) \
-		--use-stub-input --num-streams 32 --windows-per-stream 4 --n 32
+		--use-stub-input --num-streams 32 --windows-per-stream 4 --n 32 \
+		--teacher-model $(WONDERWALL_TEACHER_MODEL)
 
 train-stub: install distill-stub  ## Train the adapter on stub Kirk + local Scotty teacher
 	$(PY) scripts/train.py \
-		--adapter-config configs/adapter_default.yaml \
-		--llm-config configs/llm_gemma4.yaml \
+		--adapter-config $(WONDERWALL_ADAPTER_CONFIG) \
+		--llm-config $(WONDERWALL_LLM_CONFIG) \
 		--train-config configs/train_default.yaml \
 		--use-stub-kirk
 
@@ -95,6 +111,9 @@ eval-stub: install train-stub  ## Run A/B/C eval harness against stub Kirk
 	$(PY) -m eval.runner \
 		--distilled $(DEV_DATA) \
 		--adapter $(DEV_CKPT) \
+		--adapter-config $(WONDERWALL_ADAPTER_CONFIG) \
+		--llm-config $(WONDERWALL_LLM_CONFIG) \
+		--scotty-model $(WONDERWALL_TEACHER_MODEL) \
 		--use-stub-kirk \
 		--out $(DEV_REPORT)
 
@@ -102,6 +121,8 @@ sweep-stub: install train-stub  ## Run the calibration sweep harness end-to-end
 	$(PY) -m eval.sweep \
 		--distilled $(DEV_DATA) \
 		--adapter $(DEV_CKPT) \
+		--llm-config $(WONDERWALL_LLM_CONFIG) \
+		--scotty-model $(WONDERWALL_TEACHER_MODEL) \
 		--grid configs/sweep_default.yaml \
 		--out $(DEV_SWEEP)
 

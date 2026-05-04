@@ -22,6 +22,7 @@ import argparse
 import json
 
 import torch
+import yaml
 
 from wonderwall.adapter import KirkProjectionAdapter
 from wonderwall.distill import load_distilled
@@ -55,6 +56,10 @@ def main():
     p.add_argument("--llm-model-name", default="google/gemma-4-31b")
     p.add_argument("--llm-hidden-dim", type=int, default=5376)
     p.add_argument("--llm-device", default="cuda")
+    p.add_argument("--llm-config", default=None,
+                   help="Path to LLM YAML; if set, overrides --llm-model-name / --llm-hidden-dim")
+    p.add_argument("--adapter-config", default=None,
+                   help="Path to adapter YAML; if set, overrides --n / --use-complex / --llm-hidden-dim")
 
     p.add_argument("--n", type=int, default=16, help="Kirk window size (matches adapter config)")
     p.add_argument("--use-complex", action="store_true", help="Train/eval with complex Kirk outputs")
@@ -65,6 +70,29 @@ def main():
     p.add_argument("--max-new-tokens", type=int, default=256)
 
     args = p.parse_args()
+
+    # --- Optional config-file overrides ---
+    # Env-driven config swap (e.g. cost-knob demo on a 40GB GPU): the demo
+    # Makefile threads WONDERWALL_LLM_CONFIG / WONDERWALL_ADAPTER_CONFIG into
+    # this runner so train, eval, and sweep all see the same LLM target.
+    if args.llm_config is not None:
+        with open(args.llm_config) as f:
+            llm_yaml = yaml.safe_load(f) or {}
+        if "model_name" in llm_yaml:
+            args.llm_model_name = llm_yaml["model_name"]
+        if "hidden_dim" in llm_yaml:
+            args.llm_hidden_dim = int(llm_yaml["hidden_dim"])
+        if "device" in llm_yaml:
+            args.llm_device = llm_yaml["device"]
+    if args.adapter_config is not None:
+        with open(args.adapter_config) as f:
+            ad_yaml = yaml.safe_load(f) or {}
+        if "n" in ad_yaml:
+            args.n = int(ad_yaml["n"])
+        if "use_complex" in ad_yaml:
+            args.use_complex = bool(ad_yaml["use_complex"])
+        if "llm_hidden_dim" in ad_yaml:
+            args.llm_hidden_dim = int(ad_yaml["llm_hidden_dim"])
 
     # --- Kirk ---
     if not args.use_stub_kirk:
