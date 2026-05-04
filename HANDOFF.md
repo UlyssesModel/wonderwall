@@ -59,32 +59,53 @@ cd .. && mv ulysses-jepa wonderwall
 ### `make demo` GPU sizing — pick the right cost knob
 
 `make demo`'s defaults target Gemma 4 31B (`configs/llm_gemma4.yaml` +
-`configs/adapter_default.yaml`). Pipeline C's train-stub loads the LLM in
-bf16 on a single GPU; **Gemma 4 31B at bf16 doesn't fit on 40GB**, so on
-anything smaller than an 80GB GPU the demo OOMs at the train step.
+`configs/adapter_default.yaml`). Two practical blockers for that path on
+a dev box:
 
-**Demo on `scotty-gpu` (A100-SXM4-40GB, ~40GB) uses Gemma 3 12B** as the
-Pipeline C train-stub model (~24GB bf16, fits comfortably). All five
-make-vars below are read by `preflight`, `distill-stub`, `train-stub`,
-`eval-stub`, and `sweep-stub`:
+  - **Memory.** Gemma 4 31B at bf16 doesn't fit on 40GB; on anything
+    smaller than an 80GB GPU the train step OOMs.
+  - **HF gating.** All Google Gemma models (3 and 4) are gated on
+    HuggingFace and require a license accept + `HF_TOKEN`. Pipeline C's
+    train-stub loads weights through `transformers`, so the demo cannot
+    complete on a box without HF auth even if the GPU is large enough.
+
+**Demo on `scotty-gpu` (A100-SXM4-40GB) — and any other dev box without
+HF auth — uses Qwen 2.5 7B Instruct** (Apache-2.0, ~14GB bf16). This
+also matches the Wonderwall PR/FAQ GA commercial-tier target list
+(2026-05-04), so the demo path and a real production swap target now
+converge. All make-vars below are read by `preflight`, `distill-stub`,
+`train-stub`, `eval-stub`, and `sweep-stub`:
 
 ```bash
-WONDERWALL_LLM_CONFIG=configs/llm_gemma3_12b.yaml \
+WONDERWALL_LLM_CONFIG=configs/llm_qwen25_7b.yaml \
 WONDERWALL_ADAPTER_CONFIG=configs/adapter_demo.yaml \
-WONDERWALL_TEACHER_MODEL=gemma3:12b \
 make demo
 ```
 
-Production demo with Gemma 4 31B requires **≥80GB GPU** (H100 80GB,
-A100-80GB SXM, or multi-GPU sharded). On those boxes, `make demo` works
-out of the box — no env-var override needed.
+`WONDERWALL_TEACHER_MODEL` defaults to `gemma4:31b` in the Makefile;
+override to whatever Ollama actually has loaded if the default isn't
+pulled (the teacher is the Ollama-served narrator used during `distill`,
+independent of the Pipeline C HF model).
 
-To pin a new cost-knob LLM against a local Ollama:
+Other cost-knob LLMs that exist as parallel configs:
+
+  - `configs/llm_gemma3_12b.yaml` — Gemma 3 12B IT, hidden_dim=3840.
+    Smaller than Gemma 4 31B but still HF-gated; needs `HF_TOKEN`.
+    Pair with a copy of `adapter_demo.yaml` (`llm_hidden_dim: 3840`).
+
+Production demo with Gemma 4 31B requires **>=80GB GPU + HF auth** (H100
+80GB, A100-80GB SXM, or multi-GPU sharded). On those boxes, `make demo`
+works out of the box once `HF_TOKEN` is exported — no env-var override
+of the LLM config needed.
+
+To pin a new cost-knob LLM:
 
 ```bash
+# Local Ollama path:
 make pin-llm MODEL=<short-name> OLLAMA_MODEL=<ollama-tag> HF_ID=<hf-id>
-# then create configs/llm_<short-name>.yaml + configs/adapter_<short-name>.yaml
-# with llm_hidden_dim matching the pinned value.
+# HF-only path (no local Ollama copy; public, non-gated model):
+make pin-llm MODEL=<short-name> HF_ID=<hf-id>
+# then create configs/llm_<short-name>.yaml with the pinned hidden_dim.
 ```
 
 ## What's stubbed and needs filling in
