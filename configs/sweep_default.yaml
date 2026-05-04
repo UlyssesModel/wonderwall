@@ -1,0 +1,12 @@
+# Default sweep grid — mirrors the shape of uhura's sweep but on the
+# wonderwall axes (n, adapter hidden width, complex extension toggle).
+#
+# 12 cells × 3 pipelines = 36 cells total. Tune up/down based on eval-set size.
+
+n_values: [16, 32]
+hidden_dim_values: [512, 1024, 2048]
+use_complex_values: [false]
+pipelines:
+  - A_tokenized
+  - B_compressed_text
+  - C_embedding_injection

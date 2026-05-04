@@ -1,0 +1,120 @@
+# Local development stack — runs the full wonderwall pipeline end-to-end
+# without OpenShift. Three services:
+#
+#   ollama       — serves Gemma small (default gemma2:2b for speed; override
+#                  via SCOTTY_MODEL env). Mock for the production gemma4:31b.
+#   redpanda     — single-node Kafka-API-compatible broker. Lighter than
+#                  Strimzi for local dev; same wire protocol so confluent-kafka
+#                  client works identically.
+#   wonderwall-predictor — the KServe V2 OpenInference server with stub
+#                            Kirk; depends on ollama for Pipelines A/B.
+#
+# Usage:
+#   docker compose up                       # all three services
+#   docker compose run ollama-pull          # one-shot model pull
+#   docker compose down -v                  # tear everything down + volumes
+#
+# Hitting the predictor:
+#   curl -X POST http://localhost:8080/v2/models/wonderwall/infer \
+#        -H 'Content-Type: application/json' -d @samples/single_window.json
+#
+# This stack uses STUB Kirk by default — the real kirk-pipeline wheel isn't
+# in the container image. Override KIRK_BACKEND if you mount the wheel in.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wonderwall-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # One-shot helper to pull the dev-tier Gemma model on first run.
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: wonderwall-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: >
+      sh -c 'ollama pull ${SCOTTY_MODEL:-gemma2:2b}'
+    profiles: ["setup"]
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: wonderwall-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"   # admin API
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  wonderwall-predictor:
+    build:
+      context: .
+      dockerfile: deploy/openshift/Dockerfile
+    image: wonderwall:dev
+    container_name: wonderwall-predictor
+    ports:
+      - "8080:8080"
+    environment:
+      # Use stub Kirk for the dev container (no kirk-pipeline wheel).
+      KIRK_BACKEND: stub
+      # Point at the in-stack Ollama for Pipelines A/B.
+      SCOTTY_BASE_URL: http://ollama:11434
+      SCOTTY_MODEL: ${SCOTTY_MODEL:-gemma2:2b}
+      WONDERWALL_ADAPTER_CONFIG: /opt/app-root/src/configs/adapter_default.yaml
+      WONDERWALL_LLM_CONFIG: /opt/app-root/src/configs/llm_gemma4.yaml
+      # No real adapter checkpoint in the dev image — the predictor fails
+      # ready until you mount a checkpoint here. For Pipelines A/B testing
+      # you can set WONDERWALL_ADAPTER_CHECKPOINT to /dev/null and the
+      # routes will still 503 only on Pipeline C.
+      WONDERWALL_ADAPTER_CHECKPOINT: /opt/app-root/checkpoints/adapter.pt
+      LOG_LEVEL: INFO
+      # OMP runtime for the stub-Kirk path (no AMX, but harmless to set)
+      OMP_NUM_THREADS: "4"
+      OMP_PLACES: cores
+      OMP_PROC_BIND: close
+    volumes:
+      # Mount a checkpoint dir from the host. Empty by default; populate
+      # via `make train-stub` and bind-mount the checkpoints/ dir into the
+      # container before starting.
+      - ./checkpoints:/opt/app-root/checkpoints:ro
+    depends_on:
+      ollama:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/v2/health/live').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 60s
+
+volumes:
+  ollama-data:

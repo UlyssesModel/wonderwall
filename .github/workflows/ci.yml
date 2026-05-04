@@ -1,0 +1,91 @@
+# CI for wonderwall.
+#
+# Runs on every push and PR. Three jobs:
+#   - test     pytest across 3.11 / 3.12, CPU only
+#   - lint     ruff
+#   - parse    AST-parse all .py files (fast canary; runs even if pip install fails)
+#
+# Targets are wired via the Makefile so local + CI commands match.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  parse:
+    name: AST parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Parse every .py file
+        run: |
+          python3 - <<'PY'
+          import ast, os, sys
+          errors = []
+          for root, dirs, files in os.walk("."):
+              if any(skip in root for skip in (".git", "__pycache__", ".venv", "build", "dist")):
+                  continue
+              for f in files:
+                  if f.endswith(".py"):
+                      path = os.path.join(root, f)
+                      try:
+                          with open(path) as fh:
+                              ast.parse(fh.read(), filename=path)
+                      except SyntaxError as e:
+                          errors.append(f"{path}: {e}")
+          if errors:
+              print(f"{len(errors)} syntax errors:")
+              for e in errors:
+                  print(f"  {e}")
+              sys.exit(1)
+          print("All Python files parse cleanly.")
+          PY
+
+  test:
+    name: pytest (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install (CPU torch + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          # Install CPU-only torch index first to avoid pulling CUDA wheels.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[scotty,kafka,serve,dev]"
+          # Skip [llm] in CI — transformers + accelerate is heavyweight and
+          # the LLM-loading code paths are stub-tested elsewhere.
+      - name: Run pytest
+        run: |
+          PYTHONPATH=src pytest tests -v --tb=short \
+            --ignore=tests/test_kirk_pipeline_integration.py
+          # The kirk-pipeline integration test is skip-conditional on having
+          # the production wheel; explicitly ignore its discovery in CI.
+
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check src eval scripts tests

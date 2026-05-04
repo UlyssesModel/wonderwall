@@ -1,0 +1,99 @@
+# KServe InferenceService for wonderwall, matching the pattern from
+# tiberius-openshift commit f02fbc3 (V2 OpenInference protocol).
+#
+# Deploys the embedding-injection pipeline as a Red Hat AI catalog-publishable
+# inference endpoint: input is a stream of N×N tensor windows; output is the
+# LLM narration.
+#
+# Apply on a cluster that has KServe (RawDeployment mode, no Knative/Istio).
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: wonderwall
+  namespace: kavara-ai
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    openshift.io/display-name: "Wonderwall — Kirk-encoded narration"
+    openshift.io/description: |
+      Two-layer Kirk inference + projection adapter + Gemma 4 31B narration.
+      Input modality: financial time-series tensor windows (cross_section_temporal).
+      Output modality: natural-language narration + directional forecast.
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    serviceAccountName: wonderwall
+    containers:
+      - name: kserve-container
+        image: quay.io/kavara/wonderwall:v0.1
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        env:
+          - name: WONDERWALL_ADAPTER_CHECKPOINT
+            value: /opt/app-root/checkpoints/adapter.pt
+          - name: WONDERWALL_ADAPTER_CONFIG
+            value: /opt/app-root/configs/adapter_default.yaml
+          - name: WONDERWALL_LLM_CONFIG
+            value: /opt/app-root/configs/llm_gemma4.yaml
+          - name: KIRK_BACKEND
+            value: pipeline      # pipeline | subprocess | stub
+          - name: SCOTTY_BASE_URL
+            value: http://scotty.kavara-ai.svc.cluster.local:11434
+          # OMP runtime — calibrated `gnr-tdx` venue from ts_sor_base-1
+          # (E2 sweep, 2026-04-20). At N=32 the SOR routes to CPUBackend
+          # (NumPy/MKL AVX-512); AMX only fires at N>500. These envs
+          # apply to the SOR's matmul calls regardless.
+          - name: OMP_NUM_THREADS
+            value: "32"
+          - name: OMP_PLACES
+            value: "{0}:32:2"
+          - name: OMP_PROC_BIND
+            value: "close"
+        resources:
+          requests:
+            cpu: "8"
+            memory: "32Gi"
+          limits:
+            cpu: "16"
+            memory: "64Gi"
+            nvidia.com/gpu: "1"   # H100 / A100 required for Gemma 4 31B forward pass
+        volumeMounts:
+          - name: checkpoints
+            mountPath: /opt/app-root/checkpoints
+            readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /v2/health/ready
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /v2/health/live
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+    volumes:
+      - name: checkpoints
+        persistentVolumeClaim:
+          claimName: wonderwall-checkpoints
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wonderwall-checkpoints
+  namespace: kavara-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wonderwall
+  namespace: kavara-ai

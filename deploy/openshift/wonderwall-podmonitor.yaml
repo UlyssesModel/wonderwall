@@ -1,0 +1,45 @@
+# PodMonitor for UWM Prometheus to auto-scrape wonderwall pods.
+#
+# Mirrors the pattern used by tiberius-openshift's `ulysses-sor` (where the
+# Phase 3A KServe wrapper exposes /metrics on the same port as /v2/*).
+#
+# Once this is applied + the UWM operator is enabled on the cluster, the
+# metrics show up in the in-cluster Prometheus + Grafana automatically.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: wonderwall
+  namespace: kavara-ai
+  labels:
+    app: wonderwall
+spec:
+  selector:
+    matchLabels:
+      app: wonderwall-streamer  # streamers
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+  namespaceSelector:
+    matchNames:
+      - kavara-ai
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: wonderwall-inference
+  namespace: kavara-ai
+  labels:
+    app: wonderwall-inference
+spec:
+  selector:
+    matchLabels:
+      serving.kserve.io/inferenceservice: wonderwall
+  podMetricsEndpoints:
+    - port: kserve-container       # KServe container port
+      path: /metrics
+      interval: 15s
+  namespaceSelector:
+    matchNames:
+      - kavara-ai

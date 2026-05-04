@@ -1,0 +1,39 @@
+# LLM serving config for the embedding-injection path (Pipeline C) — DeepSeek v4 target.
+#
+# Parallel target to llm_gemma4.yaml. Wonderwall is model-agnostic (per
+# ADR-001 anti-decisions and D-015): the adapter retrains against any
+# LLM whose embedding layer is reachable through HuggingFace Transformers'
+# `inputs_embeds` interface. DeepSeek v4 is added because:
+#
+#   1. It's the closest open-weight peer to Gemma 4 31B in the open ecosystem
+#      and gives Wonderwall a hedge against any single model becoming
+#      gated, deprecated, or compute-unavailable.
+#   2. DeepSeek's MoE architecture (sparse activation) potentially reduces
+#      per-token GPU compute for the predictor — relevant when (as on
+#      2026-05-03) hyperscalers can't deliver H100/A100 capacity.
+#   3. Some financial-services customers prefer a non-Google-lineage open
+#      model for licensing / sovereignty reasons; DeepSeek satisfies that.
+#
+# Swap target by setting WONDERWALL_LLM_CONFIG to this file's path. Pipeline
+# B (text via Scotty/Ollama) and Pipeline C (embedding injection via HF) can
+# point at different LLMs simultaneously — the eval harness reports both.
+#
+# In the GCP "Office of CTO" topology, DeepSeek v4 would run on the same
+# `scotty-gpu` VM (10.128.0.16) alongside Gemma 4, multiplexed by request.
+# If memory pressure on that VM becomes a problem, allocate a sibling VM
+# (`scotty-gpu-deepseek` or similar) — internal IP wiring is the only
+# config change.
+
+# === TODO: pin once DeepSeek v4 weights are pulled locally ===
+# Likely values (verify against the published model card / config.json):
+model_name: "deepseek-ai/DeepSeek-V4"   # Verify exact HF model id
+hidden_dim: null                         # TODO pin via `make pin-llm MODEL=deepseek4` against scotty-gpu's local serving
+dtype: "bfloat16"
+device: "cuda"
+trust_remote_code: true                  # DeepSeek models historically need this for MoE routing layers
+
+# === MoE-specific knobs (no-ops on dense models like Gemma) ===
+# The projection adapter feeds soft tokens into the embedding layer; MoE
+# routing happens transformer-internal, so these are informational only.
+# moe_active_experts:        # number of experts active per token (DeepSeek-V3 was 8 of 256)
+# moe_total_experts:         # total expert pool

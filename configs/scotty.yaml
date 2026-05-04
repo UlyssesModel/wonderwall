@@ -1,0 +1,12 @@
+# Scotty / Ollama endpoint config for Pipeline B (compressed text).
+# Mirrors the defaults in github.com/UlyssesModel/scotty.
+#
+# Default points at the `scotty-gpu` VM in the GCP "Office of CTO" project
+# (project office-of-cto-491318, us-central1-a, internal IP 10.128.0.16).
+# Override via SCOTTY_BASE_URL env var when running outside that VPC, e.g.:
+#   SCOTTY_BASE_URL=http://136.115.162.133:11434  (external IP, dev/laptop)
+#   SCOTTY_BASE_URL=http://127.0.0.1:11434         (local Ollama, compose stack)
+
+base_url: "http://10.128.0.16:11434"
+model: "gemma4:31b"
+timeout_s: 120

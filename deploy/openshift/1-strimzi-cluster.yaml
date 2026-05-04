@@ -1,0 +1,159 @@
+# Strimzi 4.1.0 Kafka cluster — KRaft (Zookeeper-less), mTLS-only listener.
+#
+# Mirrors the cluster posture used by tiberius-openshift's `ulysses-kafka`
+# per the Red Hat collaboration page:
+#   - 3 brokers
+#   - mTLS listener with explicit `authentication.type: tls` (gotcha #1
+#     captured in tiberius-openshift's gotchas list — listener `tls: true`
+#     ALONE is not mTLS)
+#   - 12 partitions per topic, 24h retention for trades, 7d for entropy
+#   - lz4 compression
+#
+# Apply order:
+#   0-namespace.yaml         (Namespace + ServiceAccount + RBAC)
+#   1-strimzi-cluster.yaml   (this file — Kafka cluster CR)
+#   wonderwall-streamer.yaml + wonderwall-inference.yaml + podmonitor + dashboard
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  replicas: 3
+  roles:
+    - controller
+  storage:
+    type: persistent-claim
+    size: 10Gi
+    deleteClaim: false
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 100Gi
+        deleteClaim: false
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: ulysses-kafka
+  namespace: kavara-ai
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: 4.1.0
+    metadataVersion: "4.1"
+    listeners:
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      auto.create.topics.enable: false
+      compression.type: lz4
+    authorization:
+      type: simple
+      superUsers:
+        - ulysses-kafka-admin
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+---
+# Topics that wonderwall consumes from / produces to.
+# Tensor-frames topics are owned by uhura but listed here for visibility —
+# uhura's own manifest creates them; remove this block if it conflicts.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ulysses.tensor.frames.12s
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 86400000        # 24h
+    compression.type: lz4
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ulysses.tensor.frames.60s
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 86400000
+    compression.type: lz4
+---
+# Output topics — wonderwall narrations
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ulysses.narrations.12s
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000       # 7d
+    compression.type: lz4
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ulysses.narrations.60s
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    compression.type: lz4

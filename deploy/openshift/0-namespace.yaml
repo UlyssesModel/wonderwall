@@ -1,0 +1,48 @@
+# kavara-ai namespace + ServiceAccounts.
+# Apply BEFORE any other manifest in deploy/openshift/.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kavara-ai
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    openshift.io/cluster-monitoring: "true"
+  annotations:
+    openshift.io/display-name: "Kavara AI"
+    openshift.io/description: "wonderwall, uhura, tiberius — production deployments"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wonderwall
+  namespace: kavara-ai
+---
+# Allow the streamer to read the Strimzi user secret for mTLS creds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wonderwall-secret-reader
+  namespace: kavara-ai
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - wonderwall-kafka-user
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wonderwall-secret-reader
+  namespace: kavara-ai
+subjects:
+  - kind: ServiceAccount
+    name: wonderwall
+    namespace: kavara-ai
+roleRef:
+  kind: Role
+  name: wonderwall-secret-reader
+  apiGroup: rbac.authorization.k8s.io

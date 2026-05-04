@@ -1,0 +1,132 @@
+# Streaming variant: consume Uhura's tensor frames from Kafka, run the
+# end-to-end pipeline (Kirk → adapter → LLM), publish narrations to a
+# downstream topic.
+#
+# Mirrors uhura's deploy/openshift/uhura-streamer.yaml pattern (one Deployment
+# per cadence). Cadence determines which tensor-frames topic to subscribe to.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wonderwall-streamer-12s
+  namespace: kavara-ai
+  labels:
+    app: wonderwall-streamer
+    cadence: "12s"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wonderwall-streamer
+      cadence: "12s"
+  template:
+    metadata:
+      labels:
+        app: wonderwall-streamer
+        cadence: "12s"
+    spec:
+      serviceAccountName: wonderwall
+      containers:
+        - name: streamer
+          image: quay.io/kavara/wonderwall:v0.1
+          command: ["python", "-m", "scripts.stream_consumer"]
+          args:
+            - "--kafka-bootstrap=ulysses-kafka-bootstrap.kavara-ai.svc.cluster.local:9093"
+            - "--input-topic=ulysses.tensor.frames.12s"
+            - "--output-topic=ulysses.narrations.12s"
+            - "--adapter-config=/opt/app-root/configs/adapter_default.yaml"
+            - "--llm-config=/opt/app-root/configs/llm_gemma4.yaml"
+            - "--adapter-checkpoint=/opt/app-root/checkpoints/adapter.pt"
+            - "--windows-per-batch=4"
+          env:
+            - name: KAFKA_USER_SECRET
+              value: wonderwall-kafka-user
+            - name: SCOTTY_BASE_URL
+              value: http://scotty.kavara-ai.svc.cluster.local:11434
+            # OMP runtime — matches ts_sor_base-1's calibrated venue for
+            # gnr-tdx (E2 sweep, 2026-04-20). Stride-2 32 threads wins
+            # everywhere ≥ N=500. SOR's apply_venue_config() may override
+            # these per-call but the defaults here are correct for the
+            # Layer-2 (N=32) hot path.
+            - name: OMP_NUM_THREADS
+              value: "32"
+            - name: OMP_PLACES
+              value: "{0}:32:2"
+            - name: OMP_PROC_BIND
+              value: "close"
+            - name: KIRK_BACKEND
+              value: pipeline
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "8"
+              memory: "32Gi"
+            limits:
+              cpu: "16"
+              memory: "64Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: checkpoints
+              mountPath: /opt/app-root/checkpoints
+              readOnly: true
+            - name: kafka-creds
+              mountPath: /opt/app-root/kafka-creds
+              readOnly: true
+      volumes:
+        - name: checkpoints
+          persistentVolumeClaim:
+            claimName: wonderwall-checkpoints
+        - name: kafka-creds
+          secret:
+            secretName: wonderwall-kafka-user
+---
+# Output Kafka topic (narrations from the 12s cadence).
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ulysses.narrations.12s
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000      # 7 days
+    compression.type: lz4
+---
+# Kafka user with read on tensor.frames + write on narrations.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: wonderwall-kafka-user
+  namespace: kavara-ai
+  labels:
+    strimzi.io/cluster: ulysses-kafka
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: ulysses.tensor.frames.
+          patternType: prefix
+        operations: [Read, Describe]
+      - resource:
+          type: topic
+          name: ulysses.narrations.
+          patternType: prefix
+        operations: [Write, Describe, Create]
+      - resource:
+          type: cluster
+        operations: [IdempotentWrite]
+      - resource:
+          type: group
+          name: wonderwall-streamer
+          patternType: prefix
+        operations: [Read]

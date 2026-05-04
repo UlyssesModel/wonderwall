@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# PyTorch / training artifacts
+*.pt
+*.pth
+checkpoints/
+data/
+reports/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Local config
+.env
+.env.local
+
+# Cowork sandbox detritus (Cowork bash can create files but cannot delete
+# from the FUSE mount; clean from laptop with:
+#   find . -type f \( -name "*.bak" -o -name "*.bak2" \) -delete
+#   rm -f .cowork-write-probe
+#   rm -rf src/ulysses_jepa.egg-info
+# )
+*.bak
+*.bak2
+.cowork-write-probe

@@ -1,0 +1,19 @@
+# Default adapter configuration.
+#
+# Aligned to kirk-cli's two-layer pipeline:
+#   - Layer 1: 16×16 blocks, inference_features per block
+#   - Layer 2: 32×32 assembled feature matrix, inference_entropy
+#
+# The projection adapter taps off Layer 2 (D-006 in DECISIONS.md), so n=32.
+#
+# llm_hidden_dim must match the target LLM. Run scripts/pin_gemma_hidden_dim.py
+# to verify against the actual model.config.hidden_size of whatever Scotty
+# is serving. The 5376 value here is a placeholder (matches Gemma 3 27B);
+# Gemma 4 31B's actual value may differ.
+
+n: 32
+llm_hidden_dim: 5376
+hidden_dim: 1024
+use_complex: false      # Production Kirk: real-valued log-returns, imag=0
+dropout: 0.0
+pos_embedding_init_std: 0.02

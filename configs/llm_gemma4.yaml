@@ -1,0 +1,20 @@
+# LLM serving config for the embedding-injection path (Pipeline C) — Gemma 4 31B target.
+#
+# This points at a Gemma 4 31B served via HuggingFace Transformers (NOT via
+# Ollama / Scotty — Ollama's API doesn't accept inputs_embeds).
+#
+# In the GCP "Office of CTO" topology, Pipeline C HF inference runs on the
+# `scotty-gpu` VM alongside the Ollama daemon used by Pipeline B. No new GPU
+# capacity required — re-use what's already provisioned.
+#
+# Parallel target: configs/llm_deepseek4.yaml. Wonderwall is model-agnostic
+# (D-015) — the adapter retrains against any LLM with a reachable embedding
+# layer. Swap by setting WONDERWALL_LLM_CONFIG.
+#
+# For the production text path (Pipeline B) use scotty.yaml instead.
+
+model_name: "google/gemma-4-31b"   # Verify exact HF model id once Gemma 4 31B lands publicly
+hidden_dim: 5376                    # Pin via `make pin-gemma` against scotty-gpu's local Ollama
+dtype: "bfloat16"
+device: "cuda"
+trust_remote_code: false

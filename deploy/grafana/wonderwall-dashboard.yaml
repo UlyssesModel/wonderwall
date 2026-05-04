@@ -1,0 +1,187 @@
+# Grafana dashboard for wonderwall, importable via the Grafana Operator.
+#
+# Mirrors the 18-panel pattern used by the existing tiberius-openshift demo
+# dashboard (per the Red Hat collab page). Picked up automatically by the
+# Grafana Operator when applied — no manual upload needed.
+#
+# Apply: oc apply -f deploy/grafana/wonderwall-dashboard.yaml
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: wonderwall
+  namespace: kavara-ai
+  labels:
+    app: wonderwall
+    grafana-instance: kavara-grafana
+spec:
+  resyncPeriod: 30s
+  instanceSelector:
+    matchLabels:
+      dashboards: "kavara"
+  json: |
+    {
+      "title": "Wonderwall — Kirk-encoded narration",
+      "uid": "wonderwall",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "15s",
+      "time": {"from": "now-1h", "to": "now"},
+      "tags": ["kavara", "wonderwall", "kirk"],
+      "panels": [
+        {
+          "id": 1, "type": "stat", "title": "Pipeline ready",
+          "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+          "targets": [{"expr": "wonderwall_ready", "refId": "A"}],
+          "options": {"colorMode": "background"},
+          "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [
+            {"value": 0, "color": "red"}, {"value": 1, "color": "green"}
+          ]}}}
+        },
+        {
+          "id": 2, "type": "stat", "title": "Inference rate",
+          "gridPos": {"h": 4, "w": 6, "x": 4, "y": 0},
+          "targets": [{"expr": "sum(rate(wonderwall_inferences_completed_total[5m]))", "refId": "A"}],
+          "options": {"colorMode": "value", "graphMode": "area"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "decimals": 2}}
+        },
+        {
+          "id": 3, "type": "stat", "title": "Error rate",
+          "gridPos": {"h": 4, "w": 6, "x": 10, "y": 0},
+          "targets": [{"expr": "sum(rate(wonderwall_inferences_failed_total[5m]))", "refId": "A"}],
+          "options": {"colorMode": "background", "graphMode": "area"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "decimals": 4, "thresholds": {"mode": "absolute", "steps": [
+            {"value": 0, "color": "green"}, {"value": 0.01, "color": "yellow"}, {"value": 0.1, "color": "red"}
+          ]}}}
+        },
+        {
+          "id": 4, "type": "stat", "title": "Last entropy (nats)",
+          "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+          "targets": [{"expr": "wonderwall_entropy_last", "refId": "A"}],
+          "fieldConfig": {"defaults": {"decimals": 2}}
+        },
+        {
+          "id": 5, "type": "stat", "title": "Current batch size",
+          "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+          "targets": [{"expr": "wonderwall_batch_size", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        },
+
+        {
+          "id": 10, "type": "timeseries", "title": "Inference latency (p50/p95/p99) by pipeline",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "targets": [
+            {"expr": "histogram_quantile(0.5, sum by (le, pipeline) (rate(wonderwall_inference_seconds_bucket[5m])))",
+             "legendFormat": "p50 {{pipeline}}", "refId": "A"},
+            {"expr": "histogram_quantile(0.95, sum by (le, pipeline) (rate(wonderwall_inference_seconds_bucket[5m])))",
+             "legendFormat": "p95 {{pipeline}}", "refId": "B"},
+            {"expr": "histogram_quantile(0.99, sum by (le, pipeline) (rate(wonderwall_inference_seconds_bucket[5m])))",
+             "legendFormat": "p99 {{pipeline}}", "refId": "C"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+
+        {
+          "id": 11, "type": "timeseries", "title": "Stage latencies — Kirk vs Adapter vs LLM",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(wonderwall_kirk_seconds_bucket[5m])))",
+             "legendFormat": "p95 Kirk", "refId": "A"},
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(wonderwall_adapter_seconds_bucket[5m])))",
+             "legendFormat": "p95 Adapter", "refId": "B"},
+            {"expr": "histogram_quantile(0.95, sum by (le, pipeline) (rate(wonderwall_llm_seconds_bucket[5m])))",
+             "legendFormat": "p95 LLM {{pipeline}}", "refId": "C"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+
+        {
+          "id": 20, "type": "timeseries", "title": "Soft-token throughput",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [
+            {"expr": "sum by (pipeline) (rate(wonderwall_input_tokens_total[5m]))",
+             "legendFormat": "in/s {{pipeline}}", "refId": "A"},
+            {"expr": "sum by (pipeline) (rate(wonderwall_output_tokens_total[5m]))",
+             "legendFormat": "out/s {{pipeline}}", "refId": "B"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        },
+
+        {
+          "id": 21, "type": "timeseries", "title": "Errors by class",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [{
+            "expr": "sum by (pipeline, error_class) (rate(wonderwall_inferences_failed_total[5m]))",
+            "legendFormat": "{{pipeline}} / {{error_class}}", "refId": "A"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+
+        {
+          "id": 30, "type": "timeseries", "title": "Streaming — frames consumed vs narrations produced",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+          "targets": [
+            {"expr": "sum by (topic) (rate(wonderwall_frames_consumed_total[5m]))",
+             "legendFormat": "in {{topic}}", "refId": "A"},
+            {"expr": "sum by (topic) (rate(wonderwall_narrations_produced_total[5m]))",
+             "legendFormat": "out {{topic}}", "refId": "B"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+
+        {
+          "id": 31, "type": "timeseries", "title": "Streaming batch latency (p50/p95/p99)",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+          "targets": [
+            {"expr": "histogram_quantile(0.5, sum by (le) (rate(wonderwall_streamer_batch_seconds_bucket[5m])))",
+             "legendFormat": "p50", "refId": "A"},
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(wonderwall_streamer_batch_seconds_bucket[5m])))",
+             "legendFormat": "p95", "refId": "B"},
+            {"expr": "histogram_quantile(0.99, sum by (le) (rate(wonderwall_streamer_batch_seconds_bucket[5m])))",
+             "legendFormat": "p99", "refId": "C"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+
+        {
+          "id": 40, "type": "timeseries", "title": "Training — loss curve",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+          "targets": [
+            {"expr": "wonderwall_train_loss",     "legendFormat": "loss",     "refId": "A"},
+            {"expr": "wonderwall_train_loss_avg", "legendFormat": "avg loss", "refId": "B"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "short", "decimals": 4}}
+        },
+
+        {
+          "id": 41, "type": "timeseries", "title": "Training — gradient norm + step latency",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+          "targets": [
+            {"expr": "wonderwall_train_grad_norm", "legendFormat": "grad norm", "refId": "A"},
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(wonderwall_train_step_seconds_bucket[5m])))",
+             "legendFormat": "p95 step time", "refId": "B"}
+          ]
+        },
+
+        {
+          "id": 50, "type": "stat", "title": "Total inferences",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 36},
+          "targets": [{"expr": "sum(wonderwall_inferences_completed_total)", "refId": "A"}]
+        },
+        {
+          "id": 51, "type": "stat", "title": "Total frames consumed",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 36},
+          "targets": [{"expr": "sum(wonderwall_frames_consumed_total)", "refId": "A"}]
+        },
+        {
+          "id": 52, "type": "stat", "title": "Total training steps",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 36},
+          "targets": [{"expr": "wonderwall_train_steps_total", "refId": "A"}]
+        },
+        {
+          "id": 53, "type": "stat", "title": "Current epoch",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 36},
+          "targets": [{"expr": "wonderwall_train_epoch", "refId": "A"}]
+        }
+      ]
+    }
