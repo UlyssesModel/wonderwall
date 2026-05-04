@@ -42,12 +42,13 @@ SCOTTY_BASE_URL ?= http://127.0.0.1:11434
 pin-gemma: install  ## Auto-pin Gemma 4 31B hidden dim from $$SCOTTY_BASE_URL (default: localhost)
 	$(PY) scripts/pin_gemma_hidden_dim.py --base-url $(SCOTTY_BASE_URL)
 
-pin-deepseek: install  ## Auto-pin DeepSeek v4 hidden dim (per D-015 multi-LLM stance)
+pin-deepseek: install  ## Auto-pin DeepSeek V4-Pro hidden dim (per ADR-002 multi-LLM target selection)
 	$(PY) scripts/pin_gemma_hidden_dim.py \
 		--base-url $(SCOTTY_BASE_URL) \
 		--llm-config configs/llm_deepseek4.yaml \
 		--ollama-model deepseek-v4 \
-		--hf-fallback deepseek-ai/DeepSeek-V4
+		--hf-fallback deepseek-ai/DeepSeek-V4-Pro \
+		--no-update-adapter
 
 pin-llm: install  ## Generic pin: make pin-llm MODEL=<gemma4|deepseek4|...>
 	@if [ -z "$(MODEL)" ]; then \
@@ -55,7 +56,8 @@ pin-llm: install  ## Generic pin: make pin-llm MODEL=<gemma4|deepseek4|...>
 	fi
 	$(PY) scripts/pin_gemma_hidden_dim.py \
 		--base-url $(SCOTTY_BASE_URL) \
-		--llm-config configs/llm_$(MODEL).yaml
+		--llm-config configs/llm_$(MODEL).yaml \
+		--no-update-adapter
 
 preflight: install  ## Run environment / config / endpoint sanity checks
 	$(PY) scripts/preflight.py

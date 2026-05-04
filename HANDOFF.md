@@ -60,19 +60,40 @@ cd .. && mv ulysses-jepa wonderwall
 
 ### 1. LLM `hidden_size` per target
 
-Two `configs/llm_*.yaml` targets, both first-class per **D-015**:
+Two `configs/llm_*.yaml` targets, both first-class per **D-015** / **ADR-002**:
 
-- **Gemma 4 31B** (`configs/llm_gemma4.yaml`) — `5376` placeholder; pin via
-  `make pin-gemma` against `scotty-gpu`'s local Ollama. The script queries
-  `/api/show`, falls back to HuggingFace config.json, updates the YAML in
-  place, leaves a `.bak` file.
-- **DeepSeek v4** (`configs/llm_deepseek4.yaml`) — `hidden_dim: null`,
-  unpinned. Pin via `make pin-llm MODEL=deepseek4` (same flow,
-  different model id and serving endpoint). MoE-specific: confirm whether
-  the relevant `hidden_size` is the dense embedding dim (what the projection
-  adapter feeds into) or an expert-internal dim — for Pipeline C we want
-  the embedding-layer dim, since `inputs_embeds` is the injection surface
-  and that's pre-router.
+- **Gemma 4 31B** (`configs/llm_gemma4.yaml`) — pinned at `5376`, confirmed
+  2026-05-04 against `scotty-gpu` (10.128.0.16:11434), `gemma4.embedding_length`
+  via `ollama show gemma4:31b`. Re-run `make pin-gemma` after model upgrade.
+- **DeepSeek V4-Pro** (`configs/llm_deepseek4.yaml`) — pinned at `7168`,
+  confirmed 2026-05-04 from `deepseek-ai/DeepSeek-V4-Pro` HF `config.json`
+  (the script's `--no-update-adapter` flag keeps this from clobbering the
+  Gemma-aligned `adapter_default.yaml`). Pipeline C (HF embedding injection)
+  is unblocked. **Pipeline B (text via Ollama) is blocked** until one of:
+  1. **Ollama publishes a non-`:cloud` `deepseek-v4-pro` tag** so
+     `scotty-gpu` can pull weights locally. As of 2026-05-04, only
+     `deepseek-v4-pro:cloud` and `deepseek-v4-flash:cloud` exist on
+     ollama.com — both routed through Ollama Cloud, no local weights.
+  2. **vLLM-served DeepSeek V4-Pro on `scotty-gpu`** as a swap-in for
+     Pipeline B's Scotty backend, per ADR-002's listed mitigation. Larger
+     ops change (vLLM is a different serving runtime than Ollama, with
+     its own quantization story for a 384-expert MoE).
+
+  **Ollama Cloud was considered and rejected on threat-model grounds** —
+  it routes inference through a hosted Ollama-managed endpoint, which
+  violates ADR-001's no-hosted-LLM-for-air-gap-customers thesis.
+  Air-gap-eligible deployments must run weights locally.
+
+- **DeepSeek V4-Flash** (`configs/llm_deepseek4_flash.yaml`) — placeholder
+  scaffold, parallel to the Gemma `:26b` dev cost knob. `hidden_dim: null`;
+  pin when first used (`make pin-llm MODEL=deepseek4_flash`). Smaller
+  variant — `hidden_size=4096`, 256 experts — meant for cost-bounded
+  iteration, not production.
+
+MoE-specific note: for Pipeline C we want the embedding-layer dim (what
+the projection adapter feeds into via `inputs_embeds`), not an expert-internal
+dim. Both Ollama's `embedding_length` and HF's top-level `hidden_size` give
+this; the script reads the right one for either source.
 
 The adapter checkpoint is per-LLM-target (different `output_dim`, different
 soft-token semantics). Train and store separately:

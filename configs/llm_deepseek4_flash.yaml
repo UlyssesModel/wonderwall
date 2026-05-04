@@ -1,0 +1,36 @@
+# LLM serving config — DeepSeek V4-Flash (dev cost knob).
+#
+# Parallel to gemma4:26b on the Gemma side: this is the smaller, cheaper
+# DeepSeek variant for fast inner-loop iteration (sweeps, calibration,
+# regression checks). Production Pipeline C uses the Pro variant; see
+# llm_deepseek4.yaml.
+#
+# Architecture (from deepseek-ai/DeepSeek-V4-Flash HF config.json,
+# 2026-05-04 — not yet pinned in this file):
+#   hidden_size:        4096
+#   num_hidden_layers:  43
+#   n_routed_experts:   256
+#   active per token:   6
+#
+# Pin when first used:
+#   .venv/bin/python scripts/pin_gemma_hidden_dim.py \
+#       --llm-config configs/llm_deepseek4_flash.yaml \
+#       --hf-fallback deepseek-ai/DeepSeek-V4-Flash \
+#       --no-update-adapter
+#   # or equivalently:
+#   make pin-llm MODEL=deepseek4_flash
+#
+# The same Ollama-cloud-only / vLLM-swap-in caveats from llm_deepseek4.yaml
+# apply for Pipeline B routing — Pipeline C (HF embedding injection) is
+# the only path that runs against this config today.
+
+model_name: "deepseek-ai/DeepSeek-V4-Flash"
+hidden_dim: null                         # TODO pin via `make pin-llm MODEL=deepseek4_flash`
+dtype: "bfloat16"
+device: "cuda"
+trust_remote_code: true
+
+# === MoE-specific knobs (no-ops on dense models like Gemma) ===
+# DeepSeek-V4-Flash: 6 active of 256 routed experts (per HF config.json).
+# moe_active_experts:        # 6 for V4-Flash
+# moe_total_experts:         # 256 for V4-Flash

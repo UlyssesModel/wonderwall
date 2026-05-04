@@ -113,6 +113,25 @@ def _try_hf_config(model_id: str) -> int | None:
         return None
 
 
+def _try_hf_raw_config(model_id: str, timeout: float = 10.0) -> int | None:
+    """Fetch HF model's config.json directly and read hidden_size.
+
+    Bypasses transformers — works for bleeding-edge architectures (e.g.
+    DeepSeek V4) whose model_type isn't in the installed transformers'
+    CONFIG_MAPPING yet, so AutoConfig raises before it can read the file.
+    """
+    url = f"https://huggingface.co/{model_id}/resolve/main/config.json"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            cfg = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, json.JSONDecodeError):
+        return None
+    val = cfg.get("hidden_size")
+    if isinstance(val, int):
+        return val
+    return None
+
+
 def _update_yaml(path: str, key: str, value: int) -> tuple[object, int]:
     """Update one YAML config in place by line-targeted replacement.
 
@@ -173,6 +192,11 @@ def main() -> int:
                         "Use configs/llm_deepseek4.yaml for the DeepSeek v4 target (D-015).")
     p.add_argument("--no-write", action="store_true",
                    help="Just print the discovered value; don't update configs")
+    p.add_argument("--no-update-adapter", action="store_true",
+                   help="Don't touch configs/adapter_default.yaml. Use when pinning a "
+                        "non-default LLM (e.g. DeepSeek) so you don't silently overwrite "
+                        "the canonical Gemma-aligned value. The adapter config is "
+                        "single-tenant today; per-LLM adapter configs would supersede this.")
     args = p.parse_args()
 
     llm_cfg_path = os.path.abspath(args.llm_config)
@@ -193,7 +217,12 @@ def main() -> int:
     if hidden is None:
         hidden = _try_hf_config(args.hf_fallback)
         if hidden is not None:
-            source = f"huggingface ({args.hf_fallback})"
+            source = f"huggingface AutoConfig ({args.hf_fallback})"
+
+    if hidden is None:
+        hidden = _try_hf_raw_config(args.hf_fallback)
+        if hidden is not None:
+            source = f"huggingface config.json ({args.hf_fallback})"
 
     if hidden is None:
         print(
@@ -210,12 +239,15 @@ def main() -> int:
     if args.no_write:
         return 0
 
-    old_a, _ = _update_yaml(ADAPTER_CFG_PATH, "llm_hidden_dim", hidden)
     old_l, _ = _update_yaml(llm_cfg_path, "hidden_dim", hidden)
-    print(
-        f"[pin] adapter_default.yaml:  llm_hidden_dim {old_a} -> {hidden}\n"
-        f"[pin] {os.path.basename(llm_cfg_path):26s} hidden_dim     {old_l} -> {hidden}"
-    )
+    print(f"[pin] {os.path.basename(llm_cfg_path):26s} hidden_dim     {old_l} -> {hidden}")
+
+    if args.no_update_adapter:
+        print(f"[pin] adapter_default.yaml:  unchanged (--no-update-adapter)")
+    else:
+        old_a, _ = _update_yaml(ADAPTER_CFG_PATH, "llm_hidden_dim", hidden)
+        print(f"[pin] adapter_default.yaml:  llm_hidden_dim {old_a} -> {hidden}")
+
     print("[pin] Backups left at *.bak; revert with `mv configs/*.yaml.bak configs/*.yaml`")
     return 0
 

@@ -24,10 +24,12 @@
 # (`scotty-gpu-deepseek` or similar) — internal IP wiring is the only
 # config change.
 
-# === TODO: pin once DeepSeek v4 weights are pulled locally ===
-# Likely values (verify against the published model card / config.json):
-model_name: "deepseek-ai/DeepSeek-V4"   # Verify exact HF model id
-hidden_dim: null                         # TODO pin via `make pin-llm MODEL=deepseek4` against scotty-gpu's local serving
+# Flash is the smaller dev-cost-knob variant (hidden_size=4096, 256 experts);
+# see configs/llm_deepseek4_flash.yaml. Pro is the production target —
+# parameter peer to Gemma 4 31B and the canonical DeepSeek path under ADR-002.
+
+model_name: "deepseek-ai/DeepSeek-V4-Pro"   # V4-Pro is the prod target; V4-Flash is the dev knob
+hidden_dim: 7168                            # Confirmed 2026-05-04 from HF config.json (deepseek-ai/DeepSeek-V4-Pro)
 dtype: "bfloat16"
 device: "cuda"
 trust_remote_code: true                  # DeepSeek models historically need this for MoE routing layers
@@ -35,5 +37,6 @@ trust_remote_code: true                  # DeepSeek models historically need thi
 # === MoE-specific knobs (no-ops on dense models like Gemma) ===
 # The projection adapter feeds soft tokens into the embedding layer; MoE
 # routing happens transformer-internal, so these are informational only.
-# moe_active_experts:        # number of experts active per token (DeepSeek-V3 was 8 of 256)
-# moe_total_experts:         # total expert pool
+# DeepSeek-V4-Pro: 6 active of 384 routed experts (per HF config.json).
+# moe_active_experts:        # 6 for V4-Pro
+# moe_total_experts:         # 384 for V4-Pro
