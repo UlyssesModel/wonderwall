@@ -149,7 +149,15 @@ class KirkProjectionAdapter(nn.Module):
     def embed_kirk_output(self, ko: KirkOutput) -> torch.Tensor:
         """Convenience: project a single (un-batched) KirkOutput to (1, N+2, H)."""
         ko.validate()
-        return self.forward(ko.array.unsqueeze(0), ko.vector.unsqueeze(0))
+        # KirkClient implementations construct tensors on CPU; the adapter may
+        # have been moved to GPU by the trainer or eval harness. Co-locate the
+        # inputs with the adapter weights so callers don't need to manage
+        # device handling themselves.
+        device = next(self.parameters()).device
+        return self.forward(
+            ko.array.unsqueeze(0).to(device),
+            ko.vector.unsqueeze(0).to(device),
+        )
 
     def embed_stream(self, kos: list[KirkOutput]) -> torch.Tensor:
         """Project a stream of T KirkOutputs to a single (1, T * (N+2), H) sequence.
