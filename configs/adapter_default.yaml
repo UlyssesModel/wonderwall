@@ -6,10 +6,11 @@
 #
 # The projection adapter taps off Layer 2 (D-006 in DECISIONS.md), so n=32.
 #
-# llm_hidden_dim must match the target LLM. Run scripts/pin_gemma_hidden_dim.py
-# to verify against the actual model.config.hidden_size of whatever Scotty
-# is serving. The 5376 value here is a placeholder (matches Gemma 3 27B);
-# Gemma 4 31B's actual value may differ.
+# llm_hidden_dim must match the target LLM. Confirmed 2026-05-04 against
+# scotty-gpu (10.128.0.16:11434) — `ollama show gemma4:31b` reports
+# gemma4.embedding_length = 5376. (Same as the prior Gemma 3 27B
+# placeholder, so no numeric change.) Re-run `make pin-gemma` against the
+# active Scotty endpoint after any model upgrade.
 
 n: 32
 llm_hidden_dim: 5376

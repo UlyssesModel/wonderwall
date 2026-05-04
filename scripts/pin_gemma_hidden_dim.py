@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import urllib.error
@@ -112,19 +113,49 @@ def _try_hf_config(model_id: str) -> int | None:
         return None
 
 
-def _update_yaml(path: str, key: str, value: int) -> tuple[int, int]:
-    """Update one YAML config in place. Returns (old_value, new_value)."""
+def _update_yaml(path: str, key: str, value: int) -> tuple[object, int]:
+    """Update one YAML config in place by line-targeted replacement.
+
+    Uses a regex against the top-level scalar `key: <number>` line so we
+    preserve every comment, blank line, and quoting style in the file.
+    yaml.safe_load is still used to read the prior value (and to validate
+    that the key really is present).
+
+    Returns (old_value, new_value).
+    """
     with open(path) as f:
-        data = yaml.safe_load(f)
-    old = data.get(key)
-    data[key] = value
+        text = f.read()
+    data = yaml.safe_load(text) or {}
+    if key not in data:
+        raise KeyError(f"{key!r} not found at top level of {path}")
+    old = data[key]
+
+    # Match `key: <value>` at column 0 (top-level scalar), preserving any
+    # trailing comment after the value.
+    pattern = re.compile(
+        rf"^(?P<lead>{re.escape(key)}\s*:\s*)(?P<val>[^\s#]+)(?P<tail>\s*(?:#.*)?)$",
+        re.MULTILINE,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise ValueError(
+            f"could not locate top-level `{key}: <value>` line in {path} "
+            f"(file may use a multi-line or nested style this script can't edit)"
+        )
+    new_text = (
+        text[: match.start()]
+        + match["lead"]
+        + str(value)
+        + match["tail"]
+        + text[match.end():]
+    )
 
     backup = path + ".bak"
     shutil.copy2(path, backup)
 
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
-        yaml.safe_dump(data, f, sort_keys=False)
+        f.write(new_text)
     os.replace(tmp, path)
     return old, value
 

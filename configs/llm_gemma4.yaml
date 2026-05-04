@@ -14,7 +14,7 @@
 # For the production text path (Pipeline B) use scotty.yaml instead.
 
 model_name: "google/gemma-4-31b"   # Verify exact HF model id once Gemma 4 31B lands publicly
-hidden_dim: 5376                    # Pin via `make pin-gemma` against scotty-gpu's local Ollama
+hidden_dim: 5376                    # Confirmed 2026-05-04 against scotty-gpu (10.128.0.16:11434) gemma4:31b
 dtype: "bfloat16"
 device: "cuda"
 trust_remote_code: false
