@@ -15,7 +15,7 @@ readme = "README.md"
 dependencies = [
     "torch>=2.3",
     "numpy>=1.26",
-    "pydantic>=2.6",
+    "pydantic>=2.13,<3",
     "pyyaml>=6.0",
     "click>=8.1",
 ]
@@ -31,10 +31,10 @@ scotty = [
 ]
 kafka = [
     "confluent-kafka>=2.4",
-    "python-json-logger>=2.0",
+    "python-json-logger>=4,<5",
 ]
 serve = [
-    "fastapi>=0.115",
+    "fastapi>=0.136,<0.150",
     "uvicorn>=0.32",
     "prometheus-client>=0.21",
 ]
